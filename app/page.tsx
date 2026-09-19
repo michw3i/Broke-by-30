@@ -1,69 +1,55 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+import { useEffect, useRef, useState } from "react";
+
+type Option = { label: string; cash: number; net: number; note: string };
+type Card = { kind: "life" | "news"; title: string; body: string; source?: { headline: string; url: string }; options: Option[] };
+type FeedEntry = { t: string; tone: "mute" | "title" | "you"; cash?: number };
+
+const C = { bg: "#12132b", device: "#23243f", paper: "#f5efe0", ink: "#14162e", gold: "#ffc542", goldDk: "#c98b17", gain: "#35b34a", loss: "#e0453e", blue: "#3d7bd6", mute: "#6b6f88", cream2: "#e9e1cd" };
+const AVATAR_MAP = ["....hhhh....", "..hhhhhhhh..", ".hhhhhhhhhh.", ".hhssssssshh", ".hsssssssssh", ".hskssskssh.", ".hsssssssssh", ".hssskssssh.", ".hsssssssss.", "..ssssssss..", ".ggccccccgg.", "cccccccccccc"];
+const MO = { h: "#161616", s: "#8a5a3a" };
+
+function PixelAvatar({ size = 44, colors = MO }: { size?: number; colors?: typeof MO }) {
+  const fill = (ch: string) => ch === "h" ? colors.h : ch === "s" ? colors.s : ch === "k" ? C.ink : ch === "g" ? C.gold : ch === "c" ? C.paper : null;
+  return <svg width={size} height={size} viewBox="0 0 12 12" shapeRendering="crispEdges" style={{ border: `3px solid ${C.ink}`, background: C.ink, boxShadow: `3px 3px 0 ${C.ink}` }}>
+    {AVATAR_MAP.map((row, y) => [...row].map((ch, x) => { const color = fill(ch); return color ? <rect key={`${x}-${y}`} x={x} y={y} width={1.02} height={1.02} fill={color} /> : null; }))}
+  </svg>;
+}
+
+const DECK: Card[] = [
+  { kind: "life", title: "YOUR CAR NEEDS $1,800 IN REPAIRS", body: "The check-engine light finally meant something.", options: [{ label: "Pay in cash", cash: -1800, net: 0, note: "Ouch, but it's done." }, { label: "Put it on a card", cash: -200, net: -55, note: "Minimums for a while." }, { label: "Take the bus", cash: 0, net: -120, note: "You're late to work a lot." }] },
+  { kind: "news", title: "RENT RENEWAL IS UP 6% THIS YEAR", body: "Your landlord sends over the new lease.", source: { headline: "US shelter costs climb as CPI rises", url: "https://www.bls.gov/news.release/cpi.nr0.htm" }, options: [{ label: "Sign it", cash: 0, net: -90, note: "Same place, higher rent." }, { label: "Negotiate", cash: 0, net: -40, note: "Split the difference." }, { label: "Move cheaper", cash: -1500, net: 60, note: "Moving hurts up front." }] },
+  { kind: "news", title: "LAYOFFS SWEEP YOUR INDUSTRY", body: "Three companies in your field cut staff this week.", source: { headline: "Tech sector sheds jobs in latest round", url: "https://www.bls.gov/news.release/jolts.nr0.htm" }, options: [{ label: "Keep your head down", cash: 0, net: 0, note: "You survive the round." }, { label: "Job hunt now", cash: 0, net: 180, note: "Landed a better offer." }, { label: "Upskill on savings", cash: -600, net: 260, note: "The course paid off." }] },
+  { kind: "life", title: "FRIENDS WANT YOU IN VEGAS", body: "Flights, hotel, the whole thing.", options: [{ label: "Go all out", cash: -900, net: 0, note: "Worth it? Debatable." }, { label: "Go, but budget", cash: -250, net: 0, note: "Fun without the bill." }, { label: "Sit this one out", cash: 0, net: 0, note: "FOMO, but solvent." }] },
+  { kind: "news", title: "THE MARKET DROPS 12%", body: "Your feed is a sea of red today.", source: { headline: "Stocks tumble on rate fears", url: "https://www.investor.gov/introduction-investing/general-resources/news-alerts/alerts-bulletins/investor-bulletins" }, options: [{ label: "Buy the dip", cash: -1000, net: 35, note: "Dividends trickle in." }, { label: "Hold and wait", cash: 0, net: 0, note: "You don't flinch." }, { label: "Panic sell", cash: 400, net: -25, note: "Cash now, regret later." }] },
+  { kind: "life", title: "A RAISE - IF YOU RELOCATE", body: "Same company, new city, more money.", options: [{ label: "Take it", cash: -2000, net: 430, note: "Big move, bigger paycheck." }, { label: "Stay put", cash: 0, net: 0, note: "Roots over raise." }] },
+];
+
+const START = { age: 18, cash: 1200, net: 500 };
+const END_AGE = 30;
+const money = (n: number) => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString();
+
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+* { box-sizing: border-box; } body { margin: 0; } .pix { font-family: 'Press Start 2P', monospace; } .mono { font-family: 'DejaVu Sans Mono', 'Courier New', monospace; }
+.panel { border: 4px solid ${C.ink}; box-shadow: 6px 6px 0 ${C.ink}; } .opt { border: 3px solid ${C.ink}; box-shadow: 4px 4px 0 ${C.ink}; background: ${C.paper}; transition: transform .05s, box-shadow .05s; cursor: pointer; } .opt:hover { background: ${C.cream2}; } .opt:active { transform: translate(4px,4px); box-shadow: 0 0 0 ${C.ink}; }
+.bigbtn { border: 4px solid ${C.ink}; box-shadow: 5px 5px 0 ${C.ink}; transition: transform .05s, box-shadow .05s; cursor: pointer; } .bigbtn:active { transform: translate(5px,5px); box-shadow: 0 0 0 ${C.ink}; } .scan { pointer-events: none; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(0,0,0,.06) 0 2px, transparent 2px 4px); } .feed::-webkit-scrollbar { width: 8px; } .feed::-webkit-scrollbar-thumb { background: ${C.mute}; }
+`;
+
+export default function BrokeBy30() {
+  const [age, setAge] = useState(START.age); const [cash, setCash] = useState(START.cash); const [net, setNet] = useState(START.net); const [feed, setFeed] = useState<FeedEntry[]>([{ t: `YOU'RE 18 WITH ${money(START.cash)}.`, tone: "mute" }]); const [phase, setPhase] = useState<"decide" | "resolved" | "over">("decide"); const [deckPos, setDeckPos] = useState(0); const [flash, setFlash] = useState<"gain" | "loss" | null>(null); const [status, setStatus] = useState<"loading" | "ready">("loading"); const feedRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { const timer = window.setTimeout(() => setStatus("ready"), 350); return () => window.clearTimeout(timer); }, []);
+  const card = DECK[deckPos % DECK.length]; const won = cash > 0; const yearsLeft = END_AGE - age; const filled = age - START.age; const totalSeg = END_AGE - START.age;
+  useEffect(() => { if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight; }, [feed]);
+  const choose = (opt: Option) => { setCash((value) => value + opt.cash); setNet((value) => value + opt.net); if (opt.cash) setFlash(opt.cash > 0 ? "gain" : "loss"); setFeed((items) => [...items, { t: card.title, tone: "title" }, { t: `> ${opt.label.toUpperCase()} - ${opt.note}`, tone: "you", cash: opt.cash }]); setPhase("resolved"); window.setTimeout(() => setFlash(null), 600); };
+  const ageUp = () => { const settled = cash + net * 12; const nextAge = age + 1; setCash(settled); setAge(nextAge); setFeed((items) => [...items, { t: `+1 YEAR -> AGE ${nextAge}. ${money(net * 12)} BANKED.`, tone: "mute" }]); if (nextAge >= END_AGE) { setPhase("over"); return; } setDeckPos((position) => position + 1); setPhase("decide"); };
+  const restart = () => { setAge(START.age); setCash(START.cash); setNet(START.net); setFeed([{ t: `YOU'RE 18 WITH ${money(START.cash)}.`, tone: "mute" }]); setPhase("decide"); setDeckPos(0); setFlash(null); };
+  return <div style={{ minHeight: "100vh", background: C.bg, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "24px 12px", backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 6px), repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 6px)" }}><style>{CSS}</style><div className="panel" style={{ position: "relative", width: "100%", maxWidth: 420, background: C.device, display: "flex", flexDirection: "column", height: "min(770px, calc(100vh - 48px))", padding: 10 }}><div className="scan" />{status === "loading" ? <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}><PixelAvatar size={72} /><div className="pix" style={{ fontSize: 12, color: C.gold, textShadow: `2px 2px 0 ${C.ink}` }}>LOADING...</div><div className="mono" style={{ fontSize: 11, color: "#9aa0c0" }}>starting demo</div></div> : <><div style={{ background: C.device, padding: "6px 8px 12px", color: C.paper }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span className="pix" style={{ fontSize: 11, color: C.gold }}>BROKE BY 30</span><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="mono" style={{ fontSize: 9, fontWeight: 700, color: C.gain, border: `2px solid ${C.gain}`, padding: "2px 5px", letterSpacing: 1 }}>● DEMO</span><span className="pix" style={{ fontSize: 8, color: C.paper }}>AGE {age} · {yearsLeft} LEFT</span></div></div><div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12 }}><PixelAvatar size={56} /><div><div className="mono" style={{ fontSize: 11, color: "#9aa0c0", marginBottom: 4, letterSpacing: 1 }}>MO · CASH</div><div className="pix" style={{ fontSize: 28, lineHeight: 1.1, color: flash === "loss" ? C.loss : flash === "gain" ? C.gain : C.gold, textShadow: `3px 3px 0 ${C.ink}` }}>{money(cash)}</div></div></div><div className="mono" style={{ fontSize: 12, marginTop: 8, color: net >= 0 ? C.gain : C.loss }}>{net >= 0 ? "▲" : "▼"} {money(net)}/mo after expenses</div><div style={{ display: "flex", gap: 2, marginTop: 12 }}>{Array.from({ length: totalSeg }).map((_, i) => <div key={i} style={{ flex: 1, height: 10, border: `2px solid ${C.ink}`, background: i < filled ? C.gold : "#3a3b58" }} />)}</div></div><div ref={feedRef} className="feed panel" style={{ flex: 1, overflowY: "auto", padding: 12, background: C.paper, boxShadow: "inset 3px 3px 0 rgba(0,0,0,.08)", marginBottom: 10 }}>{feed.map((entry, i) => <FeedLine key={i} entry={entry} />)}</div><div style={{ background: C.paper }} className="panel"><div style={{ padding: 12 }}>{phase === "decide" && <div>{card.kind === "news" && <div className="pix" style={{ display: "inline-block", fontSize: 8, color: C.paper, background: C.blue, border: `3px solid ${C.ink}`, padding: "4px 6px", marginBottom: 10 }}>★ IN THE NEWS</div>}<div className="mono" style={{ fontSize: 14, fontWeight: 700, color: C.ink, lineHeight: 1.35, letterSpacing: .5 }}>{card.title}</div><div className="mono" style={{ fontSize: 13, color: C.mute, marginTop: 6, lineHeight: 1.4 }}>{card.body}</div><div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>{card.options.map((option, i) => <button key={i} onClick={() => choose(option)} className="opt mono" style={{ textAlign: "left", padding: "11px 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>▸ {option.label}</button>)}</div>{card.kind === "news" && card.source && <a href={card.source.url} target="_blank" rel="noreferrer" className="mono" style={{ display: "block", marginTop: 12, fontSize: 11, color: C.blue }}>⧉ SOURCE: {card.source.headline}</a>}</div>}{phase === "resolved" && <button onClick={ageUp} className="bigbtn pix" style={{ width: "100%", padding: 16, background: C.gold, color: C.ink, fontSize: 12 }}>AGE UP 1 YEAR ►</button>}{phase === "over" && <div style={{ textAlign: "center", padding: "6px 0" }}><div className="pix" style={{ fontSize: 15, color: won ? C.gain : C.loss, lineHeight: 1.5, textShadow: `2px 2px 0 ${C.ink}` }}>{won ? "YOU MADE IT!" : "BROKE BY 30"}</div><div className="mono" style={{ fontSize: 13, color: C.mute, marginTop: 10 }}>FINAL CASH: {money(cash)}</div><button onClick={restart} className="bigbtn pix" style={{ marginTop: 14, padding: "12px 18px", background: C.gold, color: C.ink, fontSize: 10 }}>↺ PLAY AGAIN</button></div>}</div></div></>}</div></div>;
+}
+
+function FeedLine({ entry }: { entry: FeedEntry }) {
+  if (entry.tone === "title") return <div className="mono" style={{ fontSize: 12, fontWeight: 700, color: C.ink, marginTop: 12, letterSpacing: .5 }}>{entry.t}</div>;
+  if (entry.tone === "you") return <div className="mono" style={{ marginTop: 4, marginBottom: 6 }}><div style={{ fontSize: 12.5, color: C.mute, lineHeight: 1.4 }}>{entry.t}</div>{!!entry.cash && <span style={{ fontSize: 12, fontWeight: 700, color: entry.cash < 0 ? C.loss : C.gain }}>{money(entry.cash)}</span>}</div>;
+  return <div className="mono" style={{ fontSize: 11, color: "#8a8570", margin: "10px 0", textAlign: "center", letterSpacing: 1 }}>— {entry.t} —</div>;
 }
