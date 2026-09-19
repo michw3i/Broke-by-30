@@ -1,4 +1,19 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Broke by 30
+
+An interactive financial-life simulation for SteelHacks. The Xtract demo turns a public financial source into a traceable, realistic life event.
+
+### News to Life Event demo
+
+Open `/xtract`, then scan, select a document, and run Xtract. Each generated scenario carries its signal ID, evidence excerpt, publication, headline, date, and original URL.
+
+- Live ingestion currently uses the public BLS RSS feed.
+- If the feed is unavailable, the UI explicitly switches to cached, dated public-source demo documents in `data/demoNews.ts`; it never labels them live.
+- Add `NVIDIA_API_KEY` (and optionally `NVIDIA_MODEL`) to use NVIDIA/Nemotron structured extraction. Without it—or after an API failure—the deterministic, keyword-based extractor preserves a reliable demo path.
+- New sources implement `NewsSource` in `lib/news/types.ts`, keeping RSS, government releases, manual text, and future GDELT adapters independent of extraction and scenario generation.
+
+The generated event intentionally remains a standalone typed object for clean handoff into the game engine once the owned game files are implemented.
+
+## Development
 
 ## Getting Started
 
