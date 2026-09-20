@@ -197,6 +197,21 @@ const CSS = `
 .feed::-webkit-scrollbar-thumb{background:${C.mute}}
 `;
 
+function Shell({ children }) {
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", justifyContent: "center",
+      alignItems: "flex-start", padding: "24px 12px",
+      backgroundImage: "repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0 1px,transparent 1px 6px),repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 6px)" }}>
+      <style>{CSS}</style>
+      <div className="panel" style={{ position: "relative", width: "100%", maxWidth: 420, background: C.device,
+        display: "flex", flexDirection: "column", height: "min(780px, calc(100vh - 48px))", padding: 10 }}>
+        <div className="scan" />
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function BrokeBy30() {
   const [phase, setPhase] = useState("title"); // title|rolling|roll|decide|resolved|over
   const [ch, setCh] = useState(null);          // character
@@ -212,6 +227,8 @@ export default function BrokeBy30() {
   const [deckPos, setDeckPos] = useState(0);
   const [flash, setFlash] = useState(null);
   const [lastPick, setLastPick] = useState(null);
+  const [nameInput, setNameInput] = useState("");      // player-editable name
+  const [avatarIdx, setAvatarIdx] = useState(1);       // player-picked avatar
   const feedRef = useRef(null);
 
   useEffect(() => {
@@ -227,10 +244,16 @@ export default function BrokeBy30() {
     setPhase("rolling");
     const c = await fetchCharacter();
     setCh(c);
+    setNameInput(c.name);                              // prefill, player can edit
+    setAvatarIdx(AVATARS.indexOf(c.avatar) >= 0 ? AVATARS.indexOf(c.avatar) : 1);
     setPhase("roll");
   };
 
   const begin = () => {
+    // lock in the player's chosen name + avatar
+    const chosenName = nameInput.trim() || ch.name;
+    ch.name = chosenName;
+    ch.avatar = AVATARS[avatarIdx];
     setAge(START_AGE);
     setCash(ch.cash); setDebt(ch.debt); setInvest(0);
     setIncome(ch.income); setExpense(ch.expense);
@@ -279,20 +302,6 @@ export default function BrokeBy30() {
 
   const restart = () => { setPhase("title"); setCh(null); setFeed([]); };
 
-  /* ---------- shell ---------- */
-  const Shell = ({ children }) => (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", justifyContent: "center",
-      alignItems: "flex-start", padding: "24px 12px",
-      backgroundImage: "repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0 1px,transparent 1px 6px),repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 6px)" }}>
-      <style>{CSS}</style>
-      <div className="panel" style={{ position: "relative", width: "100%", maxWidth: 420, background: C.device,
-        display: "flex", flexDirection: "column", height: "min(780px, calc(100vh - 48px))", padding: 10 }}>
-        <div className="scan" />
-        {children}
-      </div>
-    </div>
-  );
-
   /* ---------- ROLLING ---------- */
   if (phase === "rolling") return (
     <Shell>
@@ -335,15 +344,40 @@ export default function BrokeBy30() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 14, justifyContent: "center" }}>
-          <PixelAvatar size={76} colors={ch.avatar} />
+          <PixelAvatar size={76} colors={AVATARS[avatarIdx]} />
           <div>
-            <div className="pix" style={{ fontSize: 11, color: C.paper, lineHeight: 1.6 }}>{ch.name.toUpperCase()}</div>
-            <div className="mono" style={{ fontSize: 12, color: "#9aa0c0", marginTop: 6 }}>Age 18 · {ch.city}</div>
+            <input
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value.slice(0, 18))}
+              placeholder="your name"
+              className="mono"
+              style={{ width: 150, padding: "7px 9px", fontSize: 13, fontWeight: 700,
+                color: C.ink, background: C.paper, border: `3px solid ${C.ink}`,
+                boxShadow: `3px 3px 0 ${C.ink}`, outline: "none" }}
+            />
+            <div className="mono" style={{ fontSize: 12, color: "#9aa0c0", marginTop: 7 }}>Age 18 · {ch.city}</div>
             {ch.fromDB && (
               <div className="mono" style={{ fontSize: 9.5, color: C.gain, marginTop: 5, letterSpacing: 0.5 }}>
                 ◆ SNOWFLAKE #{ch.playerId}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* avatar picker */}
+        <div>
+          <div className="mono" style={{ fontSize: 10, color: "#8a91ad", letterSpacing: 1, marginBottom: 7, textAlign: "center" }}>
+            PICK YOUR LOOK
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+            {AVATARS.map((a, i) => (
+              <div key={i} onClick={() => setAvatarIdx(i)}
+                style={{ cursor: "pointer", padding: 2,
+                  border: `3px solid ${i === avatarIdx ? C.gold : "#3a3d5e"}`,
+                  background: C.ink }}>
+                <PixelAvatar size={34} colors={a} />
+              </div>
+            ))}
           </div>
         </div>
 
