@@ -75,6 +75,39 @@ function rollCharacter() {
   };
 }
 
+/* ---------- backend: real character from Snowflake ---------- */
+/* Maps POST /api/characters -> the flat shape this UI uses.
+   Their payload:  { success, player: { firstName, city{name}, background{...},
+                     occupation{title, annualSalary}, finances{...}, xtractTokens } } */
+function adaptPlayer(p) {
+  const f = p.finances || {};
+  return {
+    name: p.firstName || "Player",
+    city: p.city?.name || "Somewhere",
+    avatar: pick(AVATARS),                    // API sends no avatar; roll one
+    occupation: p.occupation?.title || "Unemployed",
+    blurb: p.background?.description || p.background?.name || "",
+    income: Math.round(Number(p.occupation?.annualSalary || 0) / 12),   // annual -> monthly
+    expense: Number(f.monthlyRent || 0) + Number(f.monthlyExpenses || 0),
+    cash: Number(f.cash || 0) + Number(f.savings || 0),
+    debt: Number(f.studentDebt || 0) + Number(f.creditCardDebt || 0) + Number(f.carDebt || 0),
+    playerId: p.playerId,
+    xtractTokens: p.xtractTokens ?? 0,
+    fromDB: true,
+  };
+}
+
+async function fetchCharacter() {
+  try {
+    const res = await fetch("/api/characters", { method: "POST" });
+    const data = await res.json();
+    if (!data?.success || !data?.player) throw new Error("bad payload");
+    return adaptPlayer(data.player);
+  } catch {
+    return rollCharacter();      // fallback: game always starts
+  }
+}
+
 /* ---------- deck ---------- */
 const DECK = [
   { kind: "life", title: "YOUR CAR NEEDS $1,800 IN REPAIRS", body: "The check-engine light finally meant something.",
@@ -165,7 +198,7 @@ const CSS = `
 `;
 
 export default function BrokeBy30() {
-  const [phase, setPhase] = useState("title"); // title|roll|decide|resolved|over
+  const [phase, setPhase] = useState("title"); // title|rolling|roll|decide|resolved|over
   const [ch, setCh] = useState(null);          // character
   const [age, setAge] = useState(START_AGE);
   const [cash, setCash] = useState(0);
@@ -189,8 +222,13 @@ export default function BrokeBy30() {
   const worth = cash + invest - debt;
   const card = deck[deckPos % deck.length];
 
-  /* --- roll a character (client click => no hydration issues) --- */
-  const roll = () => { setCh(rollCharacter()); setPhase("roll"); };
+  /* --- roll a character from the backend (falls back to local) --- */
+  const roll = async () => {
+    setPhase("rolling");
+    const c = await fetchCharacter();
+    setCh(c);
+    setPhase("roll");
+  };
 
   const begin = () => {
     setAge(START_AGE);
@@ -255,6 +293,19 @@ export default function BrokeBy30() {
     </div>
   );
 
+  /* ---------- ROLLING ---------- */
+  if (phase === "rolling") return (
+    <Shell>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+        justifyContent: "center", gap: 18 }}>
+        <PixelAvatar size={80} />
+        <div className="pix" style={{ fontSize: 12, color: C.gold, textShadow: `2px 2px 0 ${C.ink}` }}>
+          ROLLING A LIFE...
+        </div>
+      </div>
+    </Shell>
+  );
+
   /* ---------- TITLE ---------- */
   if (phase === "title") return (
     <Shell>
@@ -288,6 +339,11 @@ export default function BrokeBy30() {
           <div>
             <div className="pix" style={{ fontSize: 11, color: C.paper, lineHeight: 1.6 }}>{ch.name.toUpperCase()}</div>
             <div className="mono" style={{ fontSize: 12, color: "#9aa0c0", marginTop: 6 }}>Age 18 · {ch.city}</div>
+            {ch.fromDB && (
+              <div className="mono" style={{ fontSize: 9.5, color: C.gain, marginTop: 5, letterSpacing: 0.5 }}>
+                ◆ SNOWFLAKE #{ch.playerId}
+              </div>
+            )}
           </div>
         </div>
 
