@@ -248,50 +248,183 @@ const DECK = [
  */
 const LIFE_DECK = DECK.filter((card) => card.kind !== "news");
 
-const LOCAL_NEWS_FALLBACK = {
-  kind: "news",
-  title: "YOUR COMMUTE BUDGET NEEDS A RESET",
-  body:
-    "Live extraction is temporarily unavailable, so the game is using a cached scenario grounded in the U.S. Energy Information Administration's public fuel-price data.",
-  options: [
-    {
-      label: "Carpool twice a week",
-      expense: -45,
-      note: "A little inconvenience lowers your monthly transportation bill.",
+const LOCAL_NEWS_FALLBACKS = [
+  {
+    kind: "news",
+    title: "YOUR COMMUTE BUDGET NEEDS A RESET",
+    body:
+      "Xtract is still loading the next live article, so this turn uses an offline-safe scenario tied to the U.S. Energy Information Administration's official fuel-price series.",
+    options: [
+      {
+        label: "Carpool twice a week",
+        expense: -45,
+        note: "A little inconvenience lowers your monthly transportation bill.",
+      },
+      {
+        label: "Keep driving normally",
+        expense: 55,
+        note: "Convenience wins, but transportation takes more of your budget.",
+      },
+      {
+        label: "Try public transit",
+        cash: -90,
+        expense: -70,
+        note: "A pass costs money up front but lowers recurring commute costs.",
+      },
+    ],
+    source: {
+      sourceName: "U.S. Energy Information Administration",
+      headline: "Gasoline and Diesel Fuel Update",
+      url: "https://www.eia.gov/petroleum/gasdiesel/",
+      evidence:
+        "EIA publishes recurring retail gasoline and on-highway diesel fuel price updates.",
+      sourceKind: "cached-demo",
+      extractionMode: "deterministic-fallback",
+      fallbackReason:
+        "The live Xtract event was not ready yet, so the game used an offline-safe scenario tied to an official EIA data series.",
+      topic: "Transportation energy costs",
+      signal: "Fuel prices can change a young adult's monthly transportation budget.",
+      affectedArea: "Transportation",
+      direction: "neutral",
+      magnitude: "medium",
+      explanation:
+        "This fallback is grounded in EIA's official recurring fuel-price series and exists only so the game never breaks while live extraction is loading.",
+      gameRelevance:
+        "Commuting is a recurring monthly cost, so changes in fuel prices can force tradeoffs between convenience and savings.",
     },
-    {
-      label: "Keep driving normally",
-      expense: 55,
-      note: "Convenience wins, but transportation takes more of your budget.",
-    },
-    {
-      label: "Try public transit",
-      cash: -90,
-      expense: -70,
-      note: "A pass costs money up front but lowers recurring commute costs.",
-    },
-  ],
-  source: {
-    sourceName: "U.S. Energy Information Administration",
-    headline: "Gasoline and Diesel Fuel Update",
-    url: "https://www.eia.gov/petroleum/gasdiesel/",
-    evidence:
-      "EIA publishes recurring retail gasoline and on-highway diesel fuel price updates.",
-    sourceKind: "cached-demo",
-    extractionMode: "deterministic-fallback",
-    fallbackReason:
-      "The live game-news request was unavailable, so the frontend used its last-resort local fallback tied to an official public source.",
-    topic: "Transportation energy costs",
-    signal: "Fuel prices can change a young adult's monthly transportation budget.",
-    affectedArea: "Transportation",
-    direction: "neutral",
-    magnitude: "medium",
-    explanation:
-      "This is a demo-safe local fallback based on the EIA's official recurring fuel-price series, not a fabricated news article.",
-    gameRelevance:
-      "Commuting is a recurring monthly cost, so changes in fuel prices can force tradeoffs between convenience and savings.",
   },
-};
+  {
+    kind: "news",
+    title: "YOU ARE RECHECKING YOUR NEXT LEASE",
+    body:
+      "Xtract is still loading the next live article, so this turn uses an offline-safe housing scenario tied to U.S. Census Bureau economic indicators.",
+    options: [
+      {
+        label: "Renew for stability",
+        expense: 40,
+        note: "You avoid moving costs but accept a slightly higher monthly bill.",
+      },
+      {
+        label: "Get a roommate",
+        expense: -260,
+        note: "Less privacy gives your budget much more breathing room.",
+      },
+      {
+        label: "Move farther out",
+        cash: -900,
+        expense: -120,
+        note: "Moving hurts once, then cheaper housing helps each month.",
+      },
+    ],
+    source: {
+      sourceName: "U.S. Census Bureau",
+      headline: "Economic Indicators",
+      url: "https://www.census.gov/economic-indicators/",
+      evidence:
+        "The Census Bureau publishes timely indicators covering housing, construction, retail trade, and other parts of the economy.",
+      sourceKind: "cached-demo",
+      extractionMode: "deterministic-fallback",
+      fallbackReason:
+        "The live Xtract event was not ready yet, so the game used an offline-safe scenario tied to official Census economic indicators.",
+      topic: "Housing conditions",
+      signal: "Housing conditions can change a renter's monthly budget and moving decisions.",
+      affectedArea: "Housing",
+      direction: "neutral",
+      magnitude: "medium",
+      explanation:
+        "This fallback is grounded in the Census Bureau's official housing and construction indicators.",
+      gameRelevance:
+        "Housing is usually one of the largest monthly expenses for a young adult.",
+    },
+  },
+  {
+    kind: "news",
+    title: "YOUR DEBT PLAN NEEDS A SECOND LOOK",
+    body:
+      "Xtract is still loading the next live article, so this turn uses an offline-safe credit scenario tied to Federal Reserve consumer-credit data.",
+    options: [
+      {
+        label: "Pay down the card",
+        cash: -500,
+        debt: -500,
+        note: "Less cash today means less debt hanging over you.",
+      },
+      {
+        label: "Keep extra cash",
+        note: "You preserve your emergency cushion, but the balance stays.",
+      },
+      {
+        label: "Split the difference",
+        cash: -250,
+        debt: -250,
+        note: "You reduce the balance without draining your cash.",
+      },
+    ],
+    source: {
+      sourceName: "Federal Reserve",
+      headline: "Consumer Credit (G.19)",
+      url: "https://www.federalreserve.gov/releases/g19/current/",
+      evidence:
+        "The Federal Reserve publishes recurring statistics on consumer credit.",
+      sourceKind: "cached-demo",
+      extractionMode: "deterministic-fallback",
+      fallbackReason:
+        "The live Xtract event was not ready yet, so the game used an offline-safe scenario tied to the Federal Reserve's official consumer-credit series.",
+      topic: "Consumer credit",
+      signal: "Consumer-credit conditions can affect debt decisions and monthly cash flow.",
+      affectedArea: "Debt",
+      direction: "neutral",
+      magnitude: "medium",
+      explanation:
+        "This fallback is grounded in the Federal Reserve's official G.19 consumer-credit series.",
+      gameRelevance:
+        "Credit-card balances and other consumer debt can directly affect a young adult's monthly budget.",
+    },
+  },
+  {
+    kind: "news",
+    title: "YOUR SAVINGS RATE GETS A REALITY CHECK",
+    body:
+      "Xtract is still loading the next live article, so this turn uses an offline-safe savings scenario tied to BEA personal-income and spending data.",
+    options: [
+      {
+        label: "Automate savings",
+        cash: 150,
+        note: "You make saving part of the plan instead of whatever is left over.",
+      },
+      {
+        label: "Pay down debt",
+        cash: -300,
+        debt: -300,
+        note: "You prioritize the balance that is costing you money.",
+      },
+      {
+        label: "Keep your routine",
+        note: "Nothing changes this month.",
+      },
+    ],
+    source: {
+      sourceName: "U.S. Bureau of Economic Analysis",
+      headline: "Personal Income and Outlays",
+      url: "https://www.bea.gov/data/income-saving/personal-income",
+      evidence:
+        "BEA publishes recurring data on personal income, consumer spending, and saving.",
+      sourceKind: "cached-demo",
+      extractionMode: "deterministic-fallback",
+      fallbackReason:
+        "The live Xtract event was not ready yet, so the game used an offline-safe scenario tied to official BEA personal-income data.",
+      topic: "Income and saving",
+      signal: "Income and spending conditions can change how much room a household has to save.",
+      affectedArea: "Income",
+      direction: "neutral",
+      magnitude: "medium",
+      explanation:
+        "This fallback is grounded in BEA's official Personal Income and Outlays data.",
+      gameRelevance:
+        "A young adult's saving and debt choices depend heavily on the gap between income and spending.",
+    },
+  },
+];
 
 /* ---------- backend ---------- */
 const API_BASE = "";
@@ -379,11 +512,13 @@ function adaptNewsEvent(ev) {
 // Pull distinct Xtract events one at a time.
 // IMPORTANT: onEvent runs AS SOON AS each event is ready, so the game does
 // not wait for all six Nemotron calls before showing its first news turn.
-async function fetchNewsEvents(count = 6, onEvent = null) {
-  const out = [];
-  const seen = [];
+async function fetchNewsEvents(count = 6, onEvent = null, initialCards = []) {
+  const out = [...initialCards];
+  const seen = initialCards
+    .map((card) => card?.source?.url)
+    .filter(Boolean);
 
-  for (let i = 0; i < count; i++) {
+  for (let i = out.length; i < count; i++) {
     try {
       const qs = seen
         .map((u) => `exclude=${encodeURIComponent(u)}`)
@@ -394,12 +529,18 @@ async function fetchNewsEvents(count = 6, onEvent = null) {
         { cache: "no-store" }
       );
 
-      if (!res.ok) break;
+      if (!res.ok) {
+        console.warn("[game] /api/game-news returned", res.status);
+        break;
+      }
 
       const data = await res.json();
       const card = adaptNewsEvent(data?.event);
 
-      if (!card) break;
+      if (!card) {
+        console.warn("[game] /api/game-news returned no usable card");
+        break;
+      }
 
       out.push(card);
 
@@ -437,7 +578,7 @@ function buildPlayableDeck(lifeCards, newsCards = []) {
 
     out.push(
       newsCards[newsIndex] ??
-      LOCAL_NEWS_FALLBACK
+      LOCAL_NEWS_FALLBACKS[newsIndex % LOCAL_NEWS_FALLBACKS.length]
     );
 
     newsIndex += 1;
@@ -507,10 +648,38 @@ export default function BrokeBy30() {
   const [promo, setPromo] = useState(null);            // {title, from, to} after a job upgrade
   const feedRef = useRef(null);
   const deckPosRef = useRef(0);
+  const warmNewsRef = useRef([]);
+  const warmNewsPromiseRef = useRef(null);
 
   useEffect(() => {
     if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
   }, [feed]);
+
+  // Start the first Xtract request as soon as /game loads, before the player
+  // even rolls a character. Snowflake setup + character selection then hides
+  // most of Nemotron's latency, so the first news turn is usually live AI.
+  useEffect(() => {
+    if (!warmNewsPromiseRef.current) {
+      console.log("[game] warming first Xtract event before game start");
+      warmNewsPromiseRef.current = fetchNewsEvents(1);
+      warmNewsPromiseRef.current
+        .then((news) => {
+          warmNewsRef.current = news;
+          if (news[0]) {
+            console.log(
+              "[game] warm Xtract event ready:",
+              news[0].title,
+              "|",
+              news[0].source?.extractionMode ?? "unknown"
+            );
+          }
+        })
+        .catch((error) => {
+          console.warn("[game] warm Xtract request failed:", error);
+          warmNewsRef.current = [];
+        });
+    }
+  }, []);
 
   const net = income - expense;
   const worth = cash + invest - debt;
@@ -547,21 +716,26 @@ export default function BrokeBy30() {
     // never changes underneath the player while Xtract preloads.
     const lifeCards = shuffle(LIFE_DECK);
 
-    // News is guaranteed every other normal turn. Until Nemotron finishes,
-    // those slots use a real official-source local fallback, never example.com.
-    setDeck(buildPlayableDeck(lifeCards, []));
+    // Seed the first news slot with anything Xtract already prepared while
+    // the player was on the title / character screens. If it is not ready,
+    // each slot gets a DIFFERENT official-source fallback instead of repeating
+    // the same EIA card over and over.
+    const seededNews = [...warmNewsRef.current];
+    setDeck(buildPlayableDeck(lifeCards, seededNews));
 
-    console.log("[game] preloading Xtract news in background");
+    console.log(
+      "[game] continuing Xtract news preload in background | seeded:",
+      seededNews.length
+    );
 
-    // Insert each real Xtract event immediately when it finishes instead of
-    // waiting for all six API calls. This fixes the long stretch of only life
-    // scenarios while Nemotron was working sequentially in the background.
-    fetchNewsEvents(6, (newCard, collectedNews) => {
+    const applyNewsCards = (newCard, collectedNews) => {
       console.log(
         "[game] Xtract news ready:",
         newCard.title,
         "|",
-        newCard.source?.extractionMode ?? "unknown"
+        newCard.source?.extractionMode ?? "unknown",
+        "|",
+        newCard.source?.sourceName ?? "unknown source"
       );
 
       const refreshed = buildPlayableDeck(
@@ -573,9 +747,9 @@ export default function BrokeBy30() {
         const current = deckPosRef.current;
         const currentDeckCard = previous[current];
 
-        // Keep completed turns fixed. If the player is currently on a LIFE
-        // event, keep that visible too. If they are looking at the temporary
-        // fallback NEWS card, allow the real Xtract card to replace it.
+        // Completed turns stay frozen. A temporary fallback NEWS card may be
+        // replaced while the player is still looking at it, but once they have
+        // moved past it we never rewrite history.
         const preserveThrough =
           currentDeckCard?.kind === "life"
             ? current
@@ -594,7 +768,34 @@ export default function BrokeBy30() {
       ) {
         setLive(true);
       }
-    });
+    };
+
+    // Wait for the warm request that started when /game loaded, immediately
+    // insert it if it finished after BEGIN was pressed, then continue fetching
+    // additional distinct events. This makes the first news turn much more
+    // likely to be a real Xtract/Nemotron event rather than a local fallback.
+    (async () => {
+      let warmNews = [...warmNewsRef.current];
+
+      if (warmNewsPromiseRef.current) {
+        try {
+          warmNews = await warmNewsPromiseRef.current;
+          warmNewsRef.current = warmNews;
+        } catch {
+          warmNews = [];
+        }
+      }
+
+      if (warmNews.length > 0) {
+        applyNewsCards(warmNews[0], warmNews);
+      }
+
+      await fetchNewsEvents(
+        6,
+        applyNewsCards,
+        warmNews
+      );
+    })();
   };
 
   const choose = (opt) => {
@@ -660,6 +861,15 @@ export default function BrokeBy30() {
 
   const restart = () => {
     deckPosRef.current = 0;
+    warmNewsRef.current = [];
+    warmNewsPromiseRef.current = fetchNewsEvents(1);
+    warmNewsPromiseRef.current
+      .then((news) => {
+        warmNewsRef.current = news;
+      })
+      .catch(() => {
+        warmNewsRef.current = [];
+      });
     setPhase("title");
     setCh(null);
     setFeed([]);

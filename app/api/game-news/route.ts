@@ -86,11 +86,6 @@ const FEEDS: Array<{
     url: "https://www.federalreserve.gov/feeds/g19.xml",
     categoryHint: "credit",
   },
-  {
-    sourceName: "Federal Reserve",
-    url: "https://www.federalreserve.gov/feeds/h15.xml",
-    categoryHint: "rates",
-  },
 
   {
     sourceName: "U.S. Energy Information Administration",
@@ -228,6 +223,14 @@ const LOW_VALUE_ARTICLE_PHRASES = [
   "change in reporting",
   "changes in reporting",
   "reporting change",
+  "inclement weather",
+  "offices in washington",
+  "offices are closed",
+  "government offices are closed",
+  "planned changes",
+  "implementation of planned changes",
+  "historical treasury rates",
+  "historical rates",
 ];
 
 const CONCRETE_SIGNAL_PHRASES = [
@@ -295,7 +298,7 @@ const DIRECTLY_USEFUL_RELEASE_PHRASES = [
  * Avoid presenting stale historical feed items as if they were current
  * news. If an item has no parseable date, keep it rather than guessing.
  */
-const MAX_ARTICLE_AGE_DAYS = 365;
+const MAX_ARTICLE_AGE_DAYS = 240;
 
 /*
  * Demo-safe fallbacks.
@@ -531,7 +534,7 @@ export async function GET(request: NextRequest) {
      * has a deterministic fallback. The second attempt only matters when
      * the article is not financially meaningful at all.
      */
-    const maxAttempts = Math.min(2, orderedCandidates.length);
+    const maxAttempts = Math.min(3, orderedCandidates.length);
 
     for (let index = 0; index < maxAttempts; index += 1) {
       const article = orderedCandidates[index];
@@ -1035,6 +1038,121 @@ function isFinanciallyRelevant(
   );
 }
 
+function passesSourceSpecificQualityGate(
+  article: RawArticle,
+  text: string,
+  hasNumber: boolean,
+  hasConcreteSignal: boolean
+): boolean {
+  /*
+   * Broad agency feeds often contain technically real but useless entries.
+   * These rules only admit releases that can support a real personal-finance
+   * scenario. This is intentionally conservative for the hackathon demo.
+   */
+
+  if (article.sourceName === "Federal Reserve") {
+    if (article.categoryHint === "rates") {
+      const actualPolicyRelease = includesAny(text, [
+        "fomc statement",
+        "federal reserve issues fomc statement",
+        "target range for the federal funds rate",
+        "federal open market committee decided",
+      ]);
+
+      if (!actualPolicyRelease) {
+        return false;
+      }
+    }
+
+    if (article.categoryHint === "credit") {
+      const actualCreditData =
+        text.includes("consumer credit") &&
+        hasNumber &&
+        hasConcreteSignal &&
+        includesAny(text, [
+          "increased",
+          "decreased",
+          "rose",
+          "declined",
+          "grew",
+          "growth",
+          "outstanding",
+          "annual rate",
+        ]);
+
+      if (!actualCreditData) {
+        return false;
+      }
+    }
+  }
+
+  if (
+    article.sourceName ===
+    "U.S. Energy Information Administration"
+  ) {
+    const householdRelevantEnergy = includesAny(text, [
+      "gasoline",
+      "diesel",
+      "motor gasoline",
+      "retail fuel",
+      "retail electricity",
+      "residential electricity",
+      "residential natural gas",
+      "household energy",
+      "pump price",
+      "fuel price",
+    ]);
+
+    if (
+      !householdRelevantEnergy ||
+      !hasNumber ||
+      !hasConcreteSignal
+    ) {
+      return false;
+    }
+  }
+
+  if (
+    article.sourceName ===
+    "U.S. Bureau of Economic Analysis"
+  ) {
+    const householdIncomeRelease = includesAny(text, [
+      "personal income and outlays",
+      "personal income increased",
+      "personal income decreased",
+      "personal consumption expenditures increased",
+      "personal consumption expenditures decreased",
+      "consumer spending increased",
+      "consumer spending decreased",
+      "personal saving rate",
+    ]);
+
+    if (!householdIncomeRelease) {
+      return false;
+    }
+  }
+
+  if (
+    article.sourceName ===
+    "U.S. Census Bureau"
+  ) {
+    const usefulCensusRelease = includesAny(text, [
+      "new home sales",
+      "new residential construction",
+      "housing starts",
+      "building permits",
+      "retail sales",
+      "retail and food services",
+    ]);
+
+    if (!usefulCensusRelease) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function isGoodEconomicArticle(
   article: RawArticle
 ): boolean {
@@ -1093,6 +1211,24 @@ function isGoodEconomicArticle(
       (phrase) =>
         text.includes(phrase)
     );
+
+  if (
+    !passesSourceSpecificQualityGate(
+      article,
+      text,
+      hasNumber,
+      hasConcreteSignal
+    )
+  ) {
+    console.log(
+      "[game-news] source-specific quality rejected:",
+      article.sourceName,
+      "|",
+      article.title
+    );
+
+    return false;
+  }
 
   if (
     !directlyUseful &&
@@ -1277,39 +1413,34 @@ function orderByCategoryRotation(
   candidates: RawArticle[],
   usedCount: number
 ): RawArticle[] {
-  const start =
-    usedCount %
-    CATEGORY_ROTATION.length;
+  const preferred =
+    CATEGORY_ROTATION[
+      usedCount % CATEGORY_ROTATION.length
+    ];
 
-  const categories = [
-    ...CATEGORY_ROTATION.slice(
-      start
-    ),
-    ...CATEGORY_ROTATION.slice(
-      0,
-      start
-    ),
-  ];
+  /*
+   * Quality ALWAYS wins. Diversity only gets a small bonus.
+   * The old implementation grouped by category first, which could put a
+   * mediocre Federal Reserve housekeeping item ahead of a much better BLS,
+   * Census, EIA, or BEA release just because "rates" was next in rotation.
+   */
+  return [...candidates].sort(
+    (a, b) => {
+      const aScore =
+        articleQualityScore(a) +
+        (a.categoryHint === preferred
+          ? 2
+          : 0);
 
-  const ordered: RawArticle[] = [];
+      const bScore =
+        articleQualityScore(b) +
+        (b.categoryHint === preferred
+          ? 2
+          : 0);
 
-  for (const category of categories) {
-    ordered.push(
-      ...candidates.filter(
-        (article) =>
-          article.categoryHint ===
-          category
-      )
-    );
-  }
-
-  for (const article of candidates) {
-    if (!ordered.includes(article)) {
-      ordered.push(article);
+      return bScore - aScore;
     }
-  }
-
-  return ordered;
+  );
 }
 
 function chooseFallback(
