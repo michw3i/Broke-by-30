@@ -239,11 +239,65 @@ const DECK = [
       { label: "Minimums only", debt: 400, note: "Interest keeps stacking." }] },
 ];
 
+
+/*
+ * The old teammate deck still contains a few placeholder "news" cards
+ * with example.com links. Keep those definitions for compatibility, but
+ * NEVER put them into the playable deck. News turns now come only from
+ * /api/game-news or this official-source local fallback.
+ */
+const LIFE_DECK = DECK.filter((card) => card.kind !== "news");
+
+const LOCAL_NEWS_FALLBACK = {
+  kind: "news",
+  title: "YOUR COMMUTE BUDGET NEEDS A RESET",
+  body:
+    "Live extraction is temporarily unavailable, so the game is using a cached scenario grounded in the U.S. Energy Information Administration's public fuel-price data.",
+  options: [
+    {
+      label: "Carpool twice a week",
+      expense: -45,
+      note: "A little inconvenience lowers your monthly transportation bill.",
+    },
+    {
+      label: "Keep driving normally",
+      expense: 55,
+      note: "Convenience wins, but transportation takes more of your budget.",
+    },
+    {
+      label: "Try public transit",
+      cash: -90,
+      expense: -70,
+      note: "A pass costs money up front but lowers recurring commute costs.",
+    },
+  ],
+  source: {
+    sourceName: "U.S. Energy Information Administration",
+    headline: "Gasoline and Diesel Fuel Update",
+    url: "https://www.eia.gov/petroleum/gasdiesel/",
+    evidence:
+      "EIA publishes recurring retail gasoline and on-highway diesel fuel price updates.",
+    sourceKind: "cached-demo",
+    extractionMode: "deterministic-fallback",
+    fallbackReason:
+      "The live game-news request was unavailable, so the frontend used its last-resort local fallback tied to an official public source.",
+    topic: "Transportation energy costs",
+    signal: "Fuel prices can change a young adult's monthly transportation budget.",
+    affectedArea: "Transportation",
+    direction: "neutral",
+    magnitude: "medium",
+    explanation:
+      "This is a demo-safe local fallback based on the EIA's official recurring fuel-price series, not a fabricated news article.",
+    gameRelevance:
+      "Commuting is a recurring monthly cost, so changes in fuel prices can force tradeoffs between convenience and savings.",
+  },
+};
+
 /* ---------- backend ---------- */
 const API_BASE = "";
 const FETCH_TIMEOUT_MS = 4000;
 async function fetchCards() {
-  if (!API_BASE) return { cards: DECK, live: false };
+  if (!API_BASE) return { cards: LIFE_DECK, live: false };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -254,7 +308,7 @@ async function fetchCards() {
     if (!Array.isArray(cards) || cards.length === 0) throw new Error("no cards");
     return { cards, live: true };
   } catch (err) {
-    return { cards: DECK, live: false };
+    return { cards: LIFE_DECK, live: false };
   } finally { clearTimeout(timer); }
 }
 
@@ -265,43 +319,130 @@ async function fetchCards() {
    Ours splits income/expense, so a negative `net` becomes a positive `expense`. */
 function adaptNewsEvent(ev) {
   if (!ev || !Array.isArray(ev.options) || ev.options.length === 0) return null;
+
   return {
     kind: "news",
     title: ev.title || "IN THE NEWS",
     body: ev.body || "",
+
     source: ev.source
-      ? { headline: ev.source.headline || ev.source.sourceName || "source",
+      ? {
+          headline: ev.source.headline || ev.source.sourceName || "source",
           url: ev.source.url || "#",
           sourceName: ev.source.sourceName,
-          evidence: ev.source.evidence }
+          evidence: ev.source.evidence,
+          sourceKind: ev.source.sourceKind,
+          extractionMode: ev.source.extractionMode,
+          fallbackReason: ev.source.fallbackReason,
+          topic: ev.source.topic,
+          signal: ev.source.signal,
+          affectedArea: ev.source.affectedArea,
+          direction: ev.source.direction,
+          magnitude: ev.source.magnitude,
+          explanation: ev.source.explanation,
+          gameRelevance: ev.source.gameRelevance,
+          publishedAt: ev.source.publishedAt,
+          scenarioId: ev.source.scenarioId,
+        }
       : undefined,
-    options: ev.options.map((o) => ({
-      label: o.label,
-      note: o.note || "",
-      cash: Number(o.cash || 0),
-      debt: Number(o.debt || 0),
-      expense: -Number(o.net || 0),   // net -150/mo  ->  expense +150/mo
-    })),
+
+    options: ev.options.map((o) => {
+      const hasDetailedEffects =
+        o.income !== undefined ||
+        o.expense !== undefined ||
+        o.invest !== undefined;
+
+      return {
+        label: o.label,
+        note: o.note || "",
+        cash: Number(o.cash || 0),
+        debt: Number(o.debt || 0),
+        invest: Number(o.invest || 0),
+
+        /*
+         * New Xtract events send explicit income/expense effects so a
+         * raise actually changes INCOME and a rent increase actually
+         * changes COSTS. Older events that only have `net` still work.
+         */
+        income: hasDetailedEffects
+          ? Number(o.income || 0)
+          : 0,
+
+        expense: hasDetailedEffects
+          ? Number(o.expense || 0)
+          : -Number(o.net || 0),
+      };
+    }),
   };
 }
 
-// Pull several distinct events; `exclude` stops the API repeating the same article.
-async function fetchNewsEvents(count = 6) {
+// Pull distinct Xtract events one at a time.
+// IMPORTANT: onEvent runs AS SOON AS each event is ready, so the game does
+// not wait for all six Nemotron calls before showing its first news turn.
+async function fetchNewsEvents(count = 6, onEvent = null) {
   const out = [];
   const seen = [];
+
   for (let i = 0; i < count; i++) {
     try {
-      const qs = seen.map((u) => `exclude=${encodeURIComponent(u)}`).join("&");
-      const res = await fetch(`/api/game-news${qs ? "?" + qs : ""}`);
+      const qs = seen
+        .map((u) => `exclude=${encodeURIComponent(u)}`)
+        .join("&");
+
+      const res = await fetch(
+        `/api/game-news${qs ? "?" + qs : ""}`,
+        { cache: "no-store" }
+      );
+
       if (!res.ok) break;
+
       const data = await res.json();
       const card = adaptNewsEvent(data?.event);
+
       if (!card) break;
+
       out.push(card);
+
       const url = data?.event?.source?.url;
-      if (url) seen.push(url); else break;
-    } catch { break; }
+      if (url) seen.push(url);
+
+      if (typeof onEvent === "function") {
+        onEvent(card, [...out]);
+      }
+    } catch (error) {
+      console.warn("[game] Xtract news preload stopped:", error);
+      break;
+    }
   }
+
+  return out;
+}
+
+/*
+ * Guarantee an In The News turn every other normal turn.
+ *
+ * We start with the official-source local fallback in news slots, then
+ * replace those future slots one-by-one as real Xtract/Nemotron events
+ * arrive. This means:
+ *   - example.com cards never appear
+ *   - a news turn always appears
+ *   - the first real AI event becomes playable as soon as it finishes
+ */
+function buildPlayableDeck(lifeCards, newsCards = []) {
+  const out = [];
+  let newsIndex = 0;
+
+  for (const lifeCard of lifeCards) {
+    out.push(lifeCard);
+
+    out.push(
+      newsCards[newsIndex] ??
+      LOCAL_NEWS_FALLBACK
+    );
+
+    newsIndex += 1;
+  }
+
   return out;
 }
 
@@ -354,7 +495,7 @@ export default function BrokeBy30() {
   const [income, setIncome] = useState(0);
   const [expense, setExpense] = useState(0);
   const [feed, setFeed] = useState([]);
-  const [deck, setDeck] = useState(DECK);
+  const [deck, setDeck] = useState(() => buildPlayableDeck(shuffle(LIFE_DECK), []));
   const [live, setLive] = useState(false);
   const [deckPos, setDeckPos] = useState(0);
   const [flash, setFlash] = useState(null);
@@ -365,6 +506,7 @@ export default function BrokeBy30() {
   const [careerDone, setCareerDone] = useState(false); // offer already resolved?
   const [promo, setPromo] = useState(null);            // {title, from, to} after a job upgrade
   const feedRef = useRef(null);
+  const deckPosRef = useRef(0);
 
   useEffect(() => {
     if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
@@ -397,12 +539,59 @@ export default function BrokeBy30() {
       { t: `${ch.name.toUpperCase()}, 18, ${ch.city.toUpperCase()}`, tone: "mute" },
       { t: `OCCUPATION: ${ch.occupation.toUpperCase()}`, tone: "mute" },
     ]);
+    deckPosRef.current = 0;
     setDeckPos(0); setPhase("decide"); setLastPick(null);
     setGradJob(pick(GRAD_JOBS)); setCareerDone(false);
-    setDeck(shuffle(DECK));                       // playable immediately
-    fetchNewsEvents(6).then((news) => {           // then fold in real extracted events
-      if (news.length) {
-        setDeck((d) => shuffle([...news, ...d]));
+
+    // Freeze one shuffled life deck for this run so the current life card
+    // never changes underneath the player while Xtract preloads.
+    const lifeCards = shuffle(LIFE_DECK);
+
+    // News is guaranteed every other normal turn. Until Nemotron finishes,
+    // those slots use a real official-source local fallback, never example.com.
+    setDeck(buildPlayableDeck(lifeCards, []));
+
+    console.log("[game] preloading Xtract news in background");
+
+    // Insert each real Xtract event immediately when it finishes instead of
+    // waiting for all six API calls. This fixes the long stretch of only life
+    // scenarios while Nemotron was working sequentially in the background.
+    fetchNewsEvents(6, (newCard, collectedNews) => {
+      console.log(
+        "[game] Xtract news ready:",
+        newCard.title,
+        "|",
+        newCard.source?.extractionMode ?? "unknown"
+      );
+
+      const refreshed = buildPlayableDeck(
+        lifeCards,
+        collectedNews
+      );
+
+      setDeck((previous) => {
+        const current = deckPosRef.current;
+        const currentDeckCard = previous[current];
+
+        // Keep completed turns fixed. If the player is currently on a LIFE
+        // event, keep that visible too. If they are looking at the temporary
+        // fallback NEWS card, allow the real Xtract card to replace it.
+        const preserveThrough =
+          currentDeckCard?.kind === "life"
+            ? current
+            : current - 1;
+
+        return refreshed.map((item, index) =>
+          index <= preserveThrough
+            ? previous[index] ?? item
+            : item
+        );
+      });
+
+      if (
+        newCard.source?.sourceKind === "live" ||
+        newCard.source?.extractionMode === "ai"
+      ) {
         setLive(true);
       }
     });
@@ -458,11 +647,23 @@ export default function BrokeBy30() {
 
     if (nextAge >= END_AGE) { setPhase("over"); return; }
     // the career card replaces a turn rather than consuming a scenario
-    if (!wasCareerTurn) setDeckPos((p) => p + 1);
+    if (!wasCareerTurn) {
+      setDeckPos((p) => {
+        const next = p + 1;
+        deckPosRef.current = next;
+        return next;
+      });
+    }
+
     setPhase("decide"); setLastPick(null); setPromo(null);
   };
 
-  const restart = () => { setPhase("title"); setCh(null); setFeed([]); };
+  const restart = () => {
+    deckPosRef.current = 0;
+    setPhase("title");
+    setCh(null);
+    setFeed([]);
+  };
 
   /* ---------- ROLLING ---------- */
   if (phase === "rolling") return (
@@ -696,17 +897,7 @@ export default function BrokeBy30() {
                 ))}
               </div>
               {card.kind === "news" && card.source && (
-                <div style={{ marginTop: 11 }}>
-                  {card.source.sourceName && (
-                    <div className="mono" style={{ fontSize: 9.5, color: C.mute, letterSpacing: 1 }}>
-                      EXTRACTED FROM {card.source.sourceName.toUpperCase()}
-                    </div>
-                  )}
-                  <a href={card.source.url} target="_blank" rel="noreferrer" className="mono"
-                    style={{ display: "block", marginTop: 4, fontSize: 11, color: C.blue, textDecoration: "none" }}>
-                    ⧉ {card.source.headline}
-                  </a>
-                </div>
+                <NewsSourceDetails source={card.source} />
               )}
             </div>
           )}
@@ -772,6 +963,219 @@ export default function BrokeBy30() {
         </div>
       </div>
     </Shell>
+  );
+}
+
+
+function NewsSourceDetails({ source }) {
+  const [open, setOpen] = useState(false);
+
+  const modeLabel =
+    source.extractionMode === "ai"
+      ? "AI EXTRACTION"
+      : "LOCAL FALLBACK";
+
+  return (
+    <div style={{ marginTop: 11 }}>
+      {source.sourceName && (
+        <div
+          className="mono"
+          style={{
+            fontSize: 9.5,
+            color: C.mute,
+            letterSpacing: 1,
+          }}
+        >
+          EXTRACTED FROM {source.sourceName.toUpperCase()}
+        </div>
+      )}
+
+      <a
+        href={source.url}
+        target="_blank"
+        rel="noreferrer"
+        className="mono"
+        style={{
+          display: "block",
+          marginTop: 4,
+          fontSize: 11,
+          color: C.blue,
+          textDecoration: "none",
+        }}
+      >
+        ⧉ {source.headline}
+      </a>
+
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="mono"
+        style={{
+          marginTop: 7,
+          padding: 0,
+          border: "none",
+          background: "transparent",
+          color: C.blue,
+          fontSize: 10.5,
+          fontWeight: 700,
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        {open ? "▲ HIDE XTRACT DETAILS" : "▼ SHOW XTRACT DETAILS"}
+      </button>
+
+      {open && (
+        <div
+          className="mono"
+          style={{
+            marginTop: 8,
+            border: `2px solid ${C.ink}`,
+            background: C.cream2,
+            padding: 9,
+            color: C.ink,
+            fontSize: 10.5,
+            lineHeight: 1.45,
+          }}
+        >
+          <DetailRow
+            label="MODE"
+            value={modeLabel}
+          />
+
+          {source.topic && (
+            <DetailRow
+              label="TOPIC"
+              value={source.topic}
+            />
+          )}
+
+          {source.signal && (
+            <DetailBlock
+              label="EXTRACTED SIGNAL"
+              value={source.signal}
+            />
+          )}
+
+          {source.affectedArea && (
+            <DetailRow
+              label="AFFECTS"
+              value={source.affectedArea}
+            />
+          )}
+
+          {(source.direction ||
+            source.magnitude) && (
+            <DetailRow
+              label="CLASSIFICATION"
+              value={[
+                source.direction,
+                source.magnitude
+                  ? `${source.magnitude} impact`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+          )}
+
+          {source.evidence && (
+            <DetailBlock
+              label="SOURCE EVIDENCE"
+              value={`"${source.evidence}"`}
+            />
+          )}
+
+          {source.explanation && (
+            <DetailBlock
+              label="WHY XTRACT READ IT THIS WAY"
+              value={source.explanation}
+            />
+          )}
+
+          {source.gameRelevance && (
+            <DetailBlock
+              label="WHY IT BECAME THIS SCENARIO"
+              value={source.gameRelevance}
+            />
+          )}
+
+          {source.extractionMode !== "ai" &&
+            source.fallbackReason && (
+              <DetailBlock
+                label="FALLBACK NOTE"
+                value={source.fallbackReason}
+              />
+            )}
+
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "inline-block",
+              marginTop: 8,
+              color: C.blue,
+              fontWeight: 700,
+              textDecoration: "none",
+            }}
+          >
+            OPEN ORIGINAL SOURCE ↗
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 7,
+        marginBottom: 6,
+      }}
+    >
+      <span
+        style={{
+          color: C.mute,
+          minWidth: 88,
+        }}
+      >
+        {label}:
+      </span>
+      <span
+        style={{
+          fontWeight: 700,
+          overflowWrap: "anywhere",
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function DetailBlock({ label, value }) {
+  return (
+    <div style={{ marginTop: 7 }}>
+      <div
+        style={{
+          color: C.mute,
+          marginBottom: 3,
+        }}
+      >
+        {label}:
+      </div>
+      <div
+        style={{
+          overflowWrap: "anywhere",
+        }}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
