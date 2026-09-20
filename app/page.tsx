@@ -75,6 +75,48 @@ function rollCharacter() {
   };
 }
 
+/* ---------- age-22 career jump (college-tier roles) ---------- */
+const GRAD_JOBS = [
+  { title: "Junior Analyst",      income: 4200, blurb: "Spreadsheets, but salaried." },
+  { title: "Registered Nurse",    income: 5100, blurb: "Twelve-hour shifts, real pay." },
+  { title: "Software Developer",  income: 6200, blurb: "You shipped the take-home." },
+  { title: "Paralegal",           income: 3800, blurb: "The firm liked your writing." },
+  { title: "Accountant",          income: 4600, blurb: "Busy season is brutal." },
+  { title: "Teacher",             income: 3500, blurb: "Summers off. Sort of." },
+  { title: "Marketing Associate", income: 3900, blurb: "You run the brand's feed." },
+  { title: "Lab Technician",      income: 4000, blurb: "Precise work, steady hours." },
+  { title: "Civil Engineer",      income: 5400, blurb: "Bridges don't build themselves." },
+  { title: "Insurance Adjuster",  income: 4100, blurb: "You assess other people's bad days." },
+];
+
+// Builds the age-22 card. Taking the job costs relocation/wardrobe cash
+// and raises monthly income to the new role's level.
+function careerCard(job, currentIncome) {
+  const gain = Math.max(0, job.income - currentIncome);
+  return {
+    kind: "life",
+    career: job.title,
+    title: `A ${job.title.toUpperCase()} OFFER LANDS`,
+    body: `${job.blurb} It pays ${money(job.income * 12)}/yr — but starting costs money.`,
+    options: [
+      { label: `Take the job (+${money(gain * 12)}/yr)`, cash: -1200, income: gain,
+        note: `You're a ${job.title.toLowerCase()} now.` },
+      { label: "Take it, move somewhere cheap", cash: -2200, income: gain, expense: -150,
+        note: "Longer commute, lower rent." },
+      { label: "Turn it down, stay put", note: "You keep the life you know." },
+    ],
+  };
+}
+
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
 /* ---------- backend: real character from Snowflake ---------- */
 /* Maps POST /api/characters -> the flat shape this UI uses.
    Their payload:  { success, player: { firstName, city{name}, background{...},
@@ -147,6 +189,48 @@ const DECK = [
       { label: "Pay it off", cash: -2400, note: "Savings took the hit." },
       { label: "Payment plan", expense: 95, note: "Spread over years." },
       { label: "Ignore the letters", debt: 3000, note: "Collections, eventually." }] },
+  { kind: "life", title: "YOU GET LAID OFF WITH NO WARNING", body: "Badge deactivated Friday. No severance.",
+    options: [
+      { label: "Burn savings while job hunting", cash: -4200, note: "Four months of nothing coming in." },
+      { label: "Take the first job offered", income: -900, note: "A pay cut, but the bleeding stops." },
+      { label: "Float it on credit cards", debt: 6500, note: "The balance grows every month." }] },
+  { kind: "life", title: "YOUR LANDLORD SELLS THE BUILDING", body: "Sixty days to be out. The market is worse now.",
+    options: [
+      { label: "Sign the pricier lease", cash: -2400, expense: 420, note: "Same city, much higher rent." },
+      { label: "Move back in with family", cash: -600, expense: -700, note: "Humbling, but you save." },
+      { label: "Short-term rentals for now", cash: -3800, expense: 260, note: "Expensive and exhausting." }] },
+  { kind: "life", title: "A CAR ACCIDENT - YOU'RE AT FAULT", body: "Nobody's hurt. Everything else is a problem.",
+    options: [
+      { label: "Pay the deductible and repairs", cash: -3600, expense: 95, note: "Premiums jump too." },
+      { label: "Let it go to collections", debt: 8000, note: "This follows you for years." },
+      { label: "Sell the car, go carless", cash: 1800, expense: -180, income: -400, note: "Fewer shifts you can reach." }] },
+  { kind: "news", title: "INFLATION SPIKES 9% THIS YEAR", body: "Groceries, gas, rent - all of it at once.",
+    source: { headline: "Consumer prices post steepest rise in decades", url: "https://example.com/inflation" },
+    options: [
+      { label: "Absorb it", expense: 340, note: "Everything costs more now." },
+      { label: "Cut hard, cancel everything", expense: 120, note: "Lean year. Miserable, but survivable." },
+      { label: "Keep your life, use credit", debt: 4200, expense: 200, note: "Papering over the gap." }] },
+  { kind: "life", title: "A FAMILY EMERGENCY BACK HOME", body: "They need help and you're the one who can go.",
+    options: [
+      { label: "Fly out, take unpaid leave", cash: -2800, note: "Three weeks without pay." },
+      { label: "Send money instead", cash: -4000, note: "You couldn't be there." },
+      { label: "Take a loan to cover both", debt: 5000, note: "Interest on top of guilt." }] },
+  { kind: "life", title: "YOUR CREDIT CARD RATE JUMPS TO 29%", body: "A letter you almost didn't open.",
+    options: [
+      { label: "Aggressively pay it down", cash: -3000, debt: -3500, note: "Painful, but it stops compounding." },
+      { label: "Transfer to a new card", cash: -400, debt: 900, note: "Fee now, lower rate for a while." },
+      { label: "Keep paying minimums", debt: 2200, note: "The balance wins." }] },
+  { kind: "news", title: "YOUR INDUSTRY IS BEING AUTOMATED", body: "Half the postings vanished this quarter.",
+    source: { headline: "Automation reshapes entry-level hiring", url: "https://example.com/automation" },
+    options: [
+      { label: "Retrain into a new field", cash: -5500, income: 700, note: "Expensive bet that pays off." },
+      { label: "Hang on where you are", income: -350, note: "Hours cut, pay follows." },
+      { label: "Take a second job", income: 500, expense: 120, note: "No free evenings anymore." }] },
+  { kind: "life", title: "AN UNINSURED HOSPITAL STAY", body: "Three nights. The bill is $18,000.",
+    options: [
+      { label: "Negotiate and pay what you can", cash: -5000, debt: 4000, note: "They knocked some off." },
+      { label: "Hardship payment plan", expense: 310, note: "Years of monthly payments." },
+      { label: "Ignore it", debt: 18000, note: "Collections, credit ruined." }] },
   { kind: "news", title: "STUDENT LOAN RATES TICK UP", body: "Refinancing offers flood your inbox.",
     source: { headline: "Federal loan rates rise again", url: "https://example.com/loans" },
     options: [
@@ -174,57 +258,8 @@ async function fetchCards() {
   } finally { clearTimeout(timer); }
 }
 
-/* ---------- Xtract news adapter ---------- */
-const NEWS_FETCH_TIMEOUT_MS = 15000;
-
-function adaptXtractNewsCard(event, mode) {
-  if (!event || event.kind !== "news" || !Array.isArray(event.options)) return null;
-
-  return {
-    ...event,
-    options: event.options.map((opt) => {
-      const next = { ...opt };
-
-      // The Xtract backend expresses monthly impact as `net`.
-      // This UI tracks income and expense separately, so translate it
-      // while preserving the same monthly net effect.
-      if (typeof opt.net === "number") {
-        if (opt.net > 0 && typeof opt.income !== "number" && typeof opt.expense !== "number") {
-          next.income = opt.net;
-        } else if (opt.net < 0 && typeof opt.income !== "number" && typeof opt.expense !== "number") {
-          next.expense = Math.abs(opt.net);
-        }
-        delete next.net;
-      }
-
-      return next;
-    }),
-    source: {
-      ...(event.source || {}),
-      extractionMode:
-        event.source?.extractionMode || (mode === "ai" ? "ai" : "local"),
-    },
-  };
-}
-
-function sourceModeLabel(source) {
-  if (!source) return "";
-
-  if (!source.sourceKind && !source.extractionMode) {
-    return "GAME FALLBACK";
-  }
-
-  const sourceKind =
-    source.sourceKind === "live" ? "LIVE PUBLIC SOURCE" : "CACHED PUBLIC SOURCE";
-
-  const extraction =
-    source.extractionMode === "ai" ? "AI EXTRACTION" : "LOCAL XTRACT FALLBACK";
-
-  return `${sourceKind} · ${extraction}`;
-}
-
 /* ---------- constants ---------- */
-const START_AGE = 18, END_AGE = 30;
+const START_AGE = 18, END_AGE = 30, CAREER_AGE = 22;
 const DEBT_RATE = 0.18, INVEST_RATE = 0.07;
 const money = (n) => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString();
 
@@ -279,226 +314,19 @@ export default function BrokeBy30() {
   const [lastPick, setLastPick] = useState(null);
   const [nameInput, setNameInput] = useState("");      // player-editable name
   const [avatarIdx, setAvatarIdx] = useState(1);       // player-picked avatar
-  const [newsCard, setNewsCard] = useState(null);
-  const [newsLoading, setNewsLoading] = useState(false);
-  const [newsMode, setNewsMode] = useState(null);
+  const [gradJob, setGradJob] = useState(null);        // the age-22 offer
+  const [careerDone, setCareerDone] = useState(false); // offer already resolved?
+  const [promo, setPromo] = useState(null);            // {title, from, to} after a job upgrade
   const feedRef = useRef(null);
-  const usedNewsUrlsRef = useRef(new Set());
-
-  // One Xtract event is always prepared ahead of the player.
-  // This hides most of the Nemotron wait behind normal gameplay.
-  const prefetchedNewsRef = useRef(null);
-  const prefetchPromiseRef = useRef(null);
-  const prefetchAbortRef = useRef(null);
 
   useEffect(() => {
     if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
   }, [feed]);
 
-  useEffect(() => {
-    return () => {
-      prefetchAbortRef.current?.abort();
-    };
-  }, []);
-
   const net = income - expense;
   const worth = cash + invest - debt;
-  const baseCard = deck[deckPos % deck.length];
-  const isNewsTurn = baseCard?.kind === "news";
-  const card = isNewsTurn && newsCard ? newsCard : baseCard;
-
-  function buildNewsUrl() {
-    const params = new URLSearchParams();
-
-    usedNewsUrlsRef.current.forEach((url) => {
-      params.append("exclude", url);
-    });
-
-    const query = params.toString();
-    return query ? `/api/game-news?${query}` : "/api/game-news";
-  }
-
-  async function requestXtractNews() {
-    const controller = new AbortController();
-    prefetchAbortRef.current = controller;
-
-    const timeoutId = window.setTimeout(() => {
-      controller.abort();
-    }, NEWS_FETCH_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(buildNewsUrl(), {
-        method: "GET",
-        cache: "no-store",
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`News API returned ${response.status}`);
-      }
-
-      const data = await response.json();
-      const adapted = adaptXtractNewsCard(data?.event, data?.mode);
-
-      if (!adapted) {
-        throw new Error("News API returned an invalid event");
-      }
-
-      return {
-        card: adapted,
-        mode: data?.mode || adapted.source?.extractionMode || "unknown",
-      };
-    } finally {
-      window.clearTimeout(timeoutId);
-
-      if (prefetchAbortRef.current === controller) {
-        prefetchAbortRef.current = null;
-      }
-    }
-  }
-
-  function startNewsPrefetch() {
-    if (prefetchedNewsRef.current) {
-      return Promise.resolve(prefetchedNewsRef.current);
-    }
-
-    if (prefetchPromiseRef.current) {
-      return prefetchPromiseRef.current;
-    }
-
-    console.log("[XTRACT] preloading next news event in background");
-
-    const promise = requestXtractNews()
-      .then((result) => {
-        prefetchedNewsRef.current = result;
-
-        console.log(
-          "[XTRACT] background news ready",
-          result.mode
-        );
-
-        return result;
-      })
-      .catch((error) => {
-        console.warn(
-          "[XTRACT] background preload failed:",
-          error instanceof Error ? error.message : error
-        );
-
-        return null;
-      })
-      .finally(() => {
-        prefetchPromiseRef.current = null;
-      });
-
-    prefetchPromiseRef.current = promise;
-    return promise;
-  }
-
-  async function takePrefetchedNews() {
-    if (prefetchedNewsRef.current) {
-      const ready = prefetchedNewsRef.current;
-      prefetchedNewsRef.current = null;
-      return ready;
-    }
-
-    if (prefetchPromiseRef.current) {
-      const ready = await prefetchPromiseRef.current;
-
-      if (prefetchedNewsRef.current === ready) {
-        prefetchedNewsRef.current = null;
-      }
-
-      return ready;
-    }
-
-    const ready = await startNewsPrefetch();
-
-    if (prefetchedNewsRef.current === ready) {
-      prefetchedNewsRef.current = null;
-    }
-
-    return ready;
-  }
-
-  /*
-   * SPEED TRICK:
-   * While the player is reading/choosing the current event, Xtract prepares
-   * the next news event in the background. When a news slot appears, we
-   * consume the prepared result instead of starting Nemotron from scratch.
-   */
-  useEffect(() => {
-    if (phase !== "decide") return;
-
-    const currentBaseCard = deck[deckPos % deck.length];
-
-    // On normal life events, quietly prepare the next news event.
-    if (currentBaseCard?.kind !== "news") {
-      setNewsLoading(false);
-      setNewsCard(null);
-      setNewsMode(null);
-      startNewsPrefetch();
-      return;
-    }
-
-    let active = true;
-
-    async function showXtractNews() {
-      setNewsLoading(true);
-      setNewsCard(null);
-      setNewsMode("loading");
-
-      try {
-        console.log("[XTRACT] consuming prefetched news event");
-
-        const ready = await takePrefetchedNews();
-
-        if (!active) return;
-
-        if (!ready?.card) {
-          throw new Error("No prefetched Xtract event was available");
-        }
-
-        if (ready.card.source?.url) {
-          usedNewsUrlsRef.current.add(ready.card.source.url);
-        }
-
-        setNewsCard(ready.card);
-        setNewsMode(ready.mode);
-        setNewsLoading(false);
-
-        console.log("[XTRACT] news event displayed", ready.mode);
-
-        // Immediately prepare another one. This matters because the deck
-        // can contain consecutive news turns.
-        window.setTimeout(() => {
-          startNewsPrefetch();
-        }, 0);
-      } catch (error) {
-        if (!active) return;
-
-        console.warn(
-          "[XTRACT] live pipeline unavailable, using deck fallback:",
-          error instanceof Error ? error.message : error
-        );
-
-        setNewsCard(currentBaseCard);
-        setNewsMode("game-fallback");
-        setNewsLoading(false);
-
-        // Still try to prepare a future news event.
-        window.setTimeout(() => {
-          startNewsPrefetch();
-        }, 0);
-      }
-    }
-
-    showXtractNews();
-
-    return () => {
-      active = false;
-    };
-  }, [phase, deckPos, deck]);
+  const showCareer = age === CAREER_AGE && !careerDone && gradJob;
+  const card = showCareer ? careerCard(gradJob, income) : deck[deckPos % deck.length];
 
   /* --- roll a character from the backend (falls back to local) --- */
   const roll = async () => {
@@ -523,29 +351,41 @@ export default function BrokeBy30() {
       { t: `OCCUPATION: ${ch.occupation.toUpperCase()}`, tone: "mute" },
     ]);
     setDeckPos(0); setPhase("decide"); setLastPick(null);
-    setNewsCard(null); setNewsLoading(false); setNewsMode(null);
-    usedNewsUrlsRef.current.clear();
-    prefetchedNewsRef.current = null;
-    prefetchPromiseRef.current = null;
-    prefetchAbortRef.current?.abort();
-    prefetchAbortRef.current = null;
-    fetchCards().then(({ cards, live }) => { setDeck(cards); setLive(live); });
+    setGradJob(pick(GRAD_JOBS)); setCareerDone(false);
+    fetchCards().then(({ cards, live }) => { setDeck(shuffle(cards)); setLive(live); });
   };
 
   const choose = (opt) => {
+    if (card.career) {
+      setCareerDone(true);
+      if (opt.income) {
+        ch.occupation = card.career;                 // new job title in the HUD
+        setPromo({ title: card.career, from: income, to: income + opt.income });
+      } else {
+        setPromo(null);
+      }
+    }
     if (opt.cash) { setCash((v) => v + opt.cash); setFlash(opt.cash > 0 ? "gain" : "loss"); }
     if (opt.debt) setDebt((v) => Math.max(0, v + opt.debt));
     if (opt.invest) setInvest((v) => Math.max(0, v + opt.invest));
     if (opt.income) setIncome((v) => v + opt.income);
     if (opt.expense) setExpense((v) => Math.max(0, v + opt.expense));
-    setFeed((f) => [...f,
-      { t: card.title, tone: "title" },
-      { t: `> ${opt.label.toUpperCase()} - ${opt.note}`, tone: "you", cash: opt.cash }]);
+    setFeed((f) => {
+      const lines = [
+        { t: card.title, tone: "title" },
+        { t: `> ${opt.label.toUpperCase()} - ${opt.note}`, tone: "you", cash: opt.cash },
+      ];
+      if (card.career && opt.income) {
+        lines.push({ t: `NEW JOB: ${card.career.toUpperCase()} - ${money((income + opt.income) * 12)}/YR`, tone: "good" });
+      }
+      return [...f, ...lines];
+    });
     setLastPick(opt); setPhase("resolved");
     setTimeout(() => setFlash(null), 600);
   };
 
   const ageUp = () => {
+    const wasCareerTurn = !!card.career;
     const banked = net * 12;
     const interest = Math.round(debt * DEBT_RATE);
     const drift = INVEST_RATE + (Math.random() * 0.16 - 0.08);
@@ -564,22 +404,12 @@ export default function BrokeBy30() {
     });
 
     if (nextAge >= END_AGE) { setPhase("over"); return; }
-    setDeckPos((p) => p + 1); setPhase("decide"); setLastPick(null);
+    // the career card replaces a turn rather than consuming a scenario
+    if (!wasCareerTurn) setDeckPos((p) => p + 1);
+    setPhase("decide"); setLastPick(null); setPromo(null);
   };
 
-  const restart = () => {
-    setPhase("title");
-    setCh(null);
-    setFeed([]);
-    setNewsCard(null);
-    setNewsLoading(false);
-    setNewsMode(null);
-    usedNewsUrlsRef.current.clear();
-    prefetchedNewsRef.current = null;
-    prefetchPromiseRef.current = null;
-    prefetchAbortRef.current?.abort();
-    prefetchAbortRef.current = null;
-  };
+  const restart = () => { setPhase("title"); setCh(null); setFeed([]); };
 
   /* ---------- ROLLING ---------- */
   if (phase === "rolling") return (
@@ -670,8 +500,8 @@ export default function BrokeBy30() {
           <Stat label="DEBT" value={money(ch.debt)} color={ch.debt ? C.loss : C.mute} />
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <Stat label="INCOME/MO" value={money(ch.income)} color={C.gain} />
-          <Stat label="COSTS/MO" value={money(ch.expense)} color={C.loss} />
+          <Stat label="INCOME/YR" value={money(ch.income * 12)} color={C.gain} />
+          <Stat label="COSTS/YR" value={money(ch.expense * 12)} color={C.loss} />
         </div>
 
         <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
@@ -762,7 +592,7 @@ export default function BrokeBy30() {
         <div style={{ padding: "8px 10px 9px" }}>
           <Row label="DEBT" value={money(debt)} color={debt > 0 ? C.loss : "#5a6080"} />
           <Row label="INVESTED" value={money(invest)} color={invest > 0 ? C.gain : "#5a6080"} />
-          <Row label="PER MONTH" value={`${net >= 0 ? "+" : ""}${money(net)}`} color={net >= 0 ? C.gain : C.loss} />
+          <Row label="PER YEAR" value={`${net >= 0 ? "+" : ""}${money(net * 12)}`} color={net >= 0 ? C.gain : C.loss} />
         </div>
 
         {/* year ticker */}
@@ -790,88 +620,81 @@ export default function BrokeBy30() {
         <div style={{ padding: 12 }}>
           {phase === "decide" && (
             <div>
-              {isNewsTurn && (
+              {card.kind === "news" && (
                 <div className="pix" style={{ display: "inline-block", fontSize: 8, color: C.paper,
                   background: C.blue, border: `3px solid ${C.ink}`, padding: "4px 6px", marginBottom: 10 }}>
-                  ★ IN THE NEWS · XTRACT
+                  ★ IN THE NEWS
                 </div>
               )}
-
-              {isNewsTurn && newsLoading ? (
-                <div style={{ padding: "10px 2px 6px" }}>
-                  <div className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: C.ink }}>
-                    FINISHING XTRACT ANALYSIS...
-                  </div>
-                  <div className="mono" style={{ fontSize: 11.5, color: C.mute, marginTop: 7, lineHeight: 1.45 }}>
-                    The next news event is normally prepared in the background.
-                  </div>
+              {card.career && (
+                <div className="pix" style={{ display: "inline-block", fontSize: 8, color: C.ink,
+                  background: C.gold, border: `3px solid ${C.ink}`, padding: "4px 6px", marginBottom: 10 }}>
+                  ★ CAREER MOVE · AGE 22
                 </div>
-              ) : (
-                <>
-                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: C.ink, lineHeight: 1.35 }}>
-                    {card.title}
-                  </div>
-
-                  <div className="mono" style={{ fontSize: 13, color: C.mute, marginTop: 6, lineHeight: 1.4 }}>
-                    {card.body}
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 13 }}>
-                    {card.options.map((o, i) => (
-                      <button key={i} onClick={() => choose(o)} className="opt mono"
-                        style={{ textAlign: "left", padding: "11px 12px", fontSize: 13.5, fontWeight: 700, color: C.ink }}>
-                        ▸ {o.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {isNewsTurn && card.source && (
-                    <details style={{ marginTop: 11 }}>
-                      <summary className="mono"
-                        style={{ fontSize: 10.5, color: C.blue, cursor: "pointer", lineHeight: 1.35 }}>
-                        ⧉ SOURCE: {card.source.sourceName || card.source.headline}
-                      </summary>
-
-                      <div className="mono"
-                        style={{ fontSize: 10.5, color: C.mute, marginTop: 8, lineHeight: 1.45 }}>
-                        <div>
-                          <b style={{ color: C.ink }}>HEADLINE:</b>{" "}
-                          {card.source.headline}
-                        </div>
-
-                        {card.source.evidence && (
-                          <div style={{ marginTop: 6 }}>
-                            <b style={{ color: C.ink }}>EVIDENCE:</b>{" "}
-                            {card.source.evidence}
-                          </div>
-                        )}
-
-                        <div style={{ marginTop: 7, fontSize: 9.5, letterSpacing: 0.4 }}>
-                          {sourceModeLabel(card.source)}
-                        </div>
-
-                        {card.source.url && (
-                          <a href={card.source.url} target="_blank" rel="noreferrer"
-                            style={{ display: "inline-block", marginTop: 7, color: C.blue }}>
-                            VIEW ORIGINAL SOURCE ↗
-                          </a>
-                        )}
-                      </div>
-                    </details>
-                  )}
-
-                  {isNewsTurn && newsMode === "game-fallback" && (
-                    <div className="mono"
-                      style={{ marginTop: 8, fontSize: 9.5, color: C.mute, lineHeight: 1.4 }}>
-                      LIVE XTRACT WAS UNAVAILABLE · USING GAME FALLBACK
-                    </div>
-                  )}
-                </>
+              )}
+              <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: C.ink, lineHeight: 1.35 }}>{card.title}</div>
+              <div className="mono" style={{ fontSize: 13, color: C.mute, marginTop: 6, lineHeight: 1.4 }}>{card.body}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 13 }}>
+                {card.options.map((o, i) => (
+                  <button key={i} onClick={() => choose(o)} className="opt mono"
+                    style={{ textAlign: "left", padding: "11px 12px", fontSize: 13.5, fontWeight: 700, color: C.ink }}>
+                    ▸ {o.label}
+                  </button>
+                ))}
+              </div>
+              {card.kind === "news" && card.source && (
+                <a href={card.source.url} target="_blank" rel="noreferrer" className="mono"
+                  style={{ display: "block", marginTop: 11, fontSize: 11, color: C.blue, textDecoration: "none" }}>
+                  ⧉ SOURCE: {card.source.headline}
+                </a>
               )}
             </div>
           )}
 
-          {phase === "resolved" && lastPick && (
+          {phase === "resolved" && promo && (
+            <div>
+              <div className="pix" style={{ fontSize: 9, color: C.goldDk, marginBottom: 9, textAlign: "center" }}>
+                ★ NEW JOB ★
+              </div>
+
+              <div style={{ border: `3px solid ${C.ink}`, background: C.gold, padding: "12px 10px", textAlign: "center" }}>
+                <div className="mono" style={{ fontSize: 10, color: "#6b5312", letterSpacing: 1 }}>YOU ARE NOW A</div>
+                <div className="pix" style={{ fontSize: 12, color: C.ink, marginTop: 8, lineHeight: 1.5 }}>
+                  {promo.title.toUpperCase()}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 11 }}>
+                <div style={{ flex: 1, border: `3px solid ${C.ink}`, background: C.cream2, padding: "8px 9px", textAlign: "center" }}>
+                  <div className="mono" style={{ fontSize: 9.5, color: C.mute, letterSpacing: 1 }}>WAS</div>
+                  <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: C.mute, marginTop: 3 }}>
+                    {money(promo.from * 12)}/yr
+                  </div>
+                </div>
+                <div className="pix" style={{ fontSize: 12, color: C.gain }}>▶</div>
+                <div style={{ flex: 1, border: `3px solid ${C.ink}`, background: C.paper, padding: "8px 9px", textAlign: "center" }}>
+                  <div className="mono" style={{ fontSize: 9.5, color: C.mute, letterSpacing: 1 }}>NOW</div>
+                  <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: C.gain, marginTop: 3 }}>
+                    {money(promo.to * 12)}/yr
+                  </div>
+                </div>
+              </div>
+
+              <div className="mono" style={{ fontSize: 12, fontWeight: 700, color: C.gain, textAlign: "center", marginTop: 9 }}>
+                +{money((promo.to - promo.from) * 12)}/yr raise
+              </div>
+              <div className="mono" style={{ fontSize: 11.5, color: C.mute, textAlign: "center", margin: "8px 0 10px" }}>
+                This year nets <b style={{ color: net >= 0 ? C.gain : C.loss }}>{money(net * 12)}</b>
+              </div>
+
+              <button onClick={ageUp} className="bigbtn pix"
+                style={{ width: "100%", padding: 15, background: C.gold, color: C.ink, fontSize: 11 }}>
+                AGE UP TO {age + 1} ►
+              </button>
+            </div>
+          )}
+
+          {phase === "resolved" && !promo && lastPick && (
             <div>
               <div className="pix" style={{ fontSize: 8, color: C.goldDk, marginBottom: 8 }}>YOU CHOSE</div>
               <div className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: C.ink }}>{lastPick.label}</div>
