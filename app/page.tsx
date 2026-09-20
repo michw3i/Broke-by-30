@@ -174,6 +174,55 @@ async function fetchCards() {
   } finally { clearTimeout(timer); }
 }
 
+/* ---------- Xtract news adapter ---------- */
+const NEWS_FETCH_TIMEOUT_MS = 15000;
+
+function adaptXtractNewsCard(event, mode) {
+  if (!event || event.kind !== "news" || !Array.isArray(event.options)) return null;
+
+  return {
+    ...event,
+    options: event.options.map((opt) => {
+      const next = { ...opt };
+
+      // The Xtract backend expresses monthly impact as `net`.
+      // This UI tracks income and expense separately, so translate it
+      // while preserving the same monthly net effect.
+      if (typeof opt.net === "number") {
+        if (opt.net > 0 && typeof opt.income !== "number" && typeof opt.expense !== "number") {
+          next.income = opt.net;
+        } else if (opt.net < 0 && typeof opt.income !== "number" && typeof opt.expense !== "number") {
+          next.expense = Math.abs(opt.net);
+        }
+        delete next.net;
+      }
+
+      return next;
+    }),
+    source: {
+      ...(event.source || {}),
+      extractionMode:
+        event.source?.extractionMode || (mode === "ai" ? "ai" : "local"),
+    },
+  };
+}
+
+function sourceModeLabel(source) {
+  if (!source) return "";
+
+  if (!source.sourceKind && !source.extractionMode) {
+    return "GAME FALLBACK";
+  }
+
+  const sourceKind =
+    source.sourceKind === "live" ? "LIVE PUBLIC SOURCE" : "CACHED PUBLIC SOURCE";
+
+  const extraction =
+    source.extractionMode === "ai" ? "AI EXTRACTION" : "LOCAL XTRACT FALLBACK";
+
+  return `${sourceKind} · ${extraction}`;
+}
+
 /* ---------- constants ---------- */
 const START_AGE = 18, END_AGE = 30;
 const DEBT_RATE = 0.18, INVEST_RATE = 0.07;
@@ -230,15 +279,226 @@ export default function BrokeBy30() {
   const [lastPick, setLastPick] = useState(null);
   const [nameInput, setNameInput] = useState("");      // player-editable name
   const [avatarIdx, setAvatarIdx] = useState(1);       // player-picked avatar
+  const [newsCard, setNewsCard] = useState(null);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsMode, setNewsMode] = useState(null);
   const feedRef = useRef(null);
+  const usedNewsUrlsRef = useRef(new Set());
+
+  // One Xtract event is always prepared ahead of the player.
+  // This hides most of the Nemotron wait behind normal gameplay.
+  const prefetchedNewsRef = useRef(null);
+  const prefetchPromiseRef = useRef(null);
+  const prefetchAbortRef = useRef(null);
 
   useEffect(() => {
     if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
   }, [feed]);
 
+  useEffect(() => {
+    return () => {
+      prefetchAbortRef.current?.abort();
+    };
+  }, []);
+
   const net = income - expense;
   const worth = cash + invest - debt;
-  const card = deck[deckPos % deck.length];
+  const baseCard = deck[deckPos % deck.length];
+  const isNewsTurn = baseCard?.kind === "news";
+  const card = isNewsTurn && newsCard ? newsCard : baseCard;
+
+  function buildNewsUrl() {
+    const params = new URLSearchParams();
+
+    usedNewsUrlsRef.current.forEach((url) => {
+      params.append("exclude", url);
+    });
+
+    const query = params.toString();
+    return query ? `/api/game-news?${query}` : "/api/game-news";
+  }
+
+  async function requestXtractNews() {
+    const controller = new AbortController();
+    prefetchAbortRef.current = controller;
+
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, NEWS_FETCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(buildNewsUrl(), {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`News API returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      const adapted = adaptXtractNewsCard(data?.event, data?.mode);
+
+      if (!adapted) {
+        throw new Error("News API returned an invalid event");
+      }
+
+      return {
+        card: adapted,
+        mode: data?.mode || adapted.source?.extractionMode || "unknown",
+      };
+    } finally {
+      window.clearTimeout(timeoutId);
+
+      if (prefetchAbortRef.current === controller) {
+        prefetchAbortRef.current = null;
+      }
+    }
+  }
+
+  function startNewsPrefetch() {
+    if (prefetchedNewsRef.current) {
+      return Promise.resolve(prefetchedNewsRef.current);
+    }
+
+    if (prefetchPromiseRef.current) {
+      return prefetchPromiseRef.current;
+    }
+
+    console.log("[XTRACT] preloading next news event in background");
+
+    const promise = requestXtractNews()
+      .then((result) => {
+        prefetchedNewsRef.current = result;
+
+        console.log(
+          "[XTRACT] background news ready",
+          result.mode
+        );
+
+        return result;
+      })
+      .catch((error) => {
+        console.warn(
+          "[XTRACT] background preload failed:",
+          error instanceof Error ? error.message : error
+        );
+
+        return null;
+      })
+      .finally(() => {
+        prefetchPromiseRef.current = null;
+      });
+
+    prefetchPromiseRef.current = promise;
+    return promise;
+  }
+
+  async function takePrefetchedNews() {
+    if (prefetchedNewsRef.current) {
+      const ready = prefetchedNewsRef.current;
+      prefetchedNewsRef.current = null;
+      return ready;
+    }
+
+    if (prefetchPromiseRef.current) {
+      const ready = await prefetchPromiseRef.current;
+
+      if (prefetchedNewsRef.current === ready) {
+        prefetchedNewsRef.current = null;
+      }
+
+      return ready;
+    }
+
+    const ready = await startNewsPrefetch();
+
+    if (prefetchedNewsRef.current === ready) {
+      prefetchedNewsRef.current = null;
+    }
+
+    return ready;
+  }
+
+  /*
+   * SPEED TRICK:
+   * While the player is reading/choosing the current event, Xtract prepares
+   * the next news event in the background. When a news slot appears, we
+   * consume the prepared result instead of starting Nemotron from scratch.
+   */
+  useEffect(() => {
+    if (phase !== "decide") return;
+
+    const currentBaseCard = deck[deckPos % deck.length];
+
+    // On normal life events, quietly prepare the next news event.
+    if (currentBaseCard?.kind !== "news") {
+      setNewsLoading(false);
+      setNewsCard(null);
+      setNewsMode(null);
+      startNewsPrefetch();
+      return;
+    }
+
+    let active = true;
+
+    async function showXtractNews() {
+      setNewsLoading(true);
+      setNewsCard(null);
+      setNewsMode("loading");
+
+      try {
+        console.log("[XTRACT] consuming prefetched news event");
+
+        const ready = await takePrefetchedNews();
+
+        if (!active) return;
+
+        if (!ready?.card) {
+          throw new Error("No prefetched Xtract event was available");
+        }
+
+        if (ready.card.source?.url) {
+          usedNewsUrlsRef.current.add(ready.card.source.url);
+        }
+
+        setNewsCard(ready.card);
+        setNewsMode(ready.mode);
+        setNewsLoading(false);
+
+        console.log("[XTRACT] news event displayed", ready.mode);
+
+        // Immediately prepare another one. This matters because the deck
+        // can contain consecutive news turns.
+        window.setTimeout(() => {
+          startNewsPrefetch();
+        }, 0);
+      } catch (error) {
+        if (!active) return;
+
+        console.warn(
+          "[XTRACT] live pipeline unavailable, using deck fallback:",
+          error instanceof Error ? error.message : error
+        );
+
+        setNewsCard(currentBaseCard);
+        setNewsMode("game-fallback");
+        setNewsLoading(false);
+
+        // Still try to prepare a future news event.
+        window.setTimeout(() => {
+          startNewsPrefetch();
+        }, 0);
+      }
+    }
+
+    showXtractNews();
+
+    return () => {
+      active = false;
+    };
+  }, [phase, deckPos, deck]);
 
   /* --- roll a character from the backend (falls back to local) --- */
   const roll = async () => {
@@ -263,6 +523,12 @@ export default function BrokeBy30() {
       { t: `OCCUPATION: ${ch.occupation.toUpperCase()}`, tone: "mute" },
     ]);
     setDeckPos(0); setPhase("decide"); setLastPick(null);
+    setNewsCard(null); setNewsLoading(false); setNewsMode(null);
+    usedNewsUrlsRef.current.clear();
+    prefetchedNewsRef.current = null;
+    prefetchPromiseRef.current = null;
+    prefetchAbortRef.current?.abort();
+    prefetchAbortRef.current = null;
     fetchCards().then(({ cards, live }) => { setDeck(cards); setLive(live); });
   };
 
@@ -301,7 +567,19 @@ export default function BrokeBy30() {
     setDeckPos((p) => p + 1); setPhase("decide"); setLastPick(null);
   };
 
-  const restart = () => { setPhase("title"); setCh(null); setFeed([]); };
+  const restart = () => {
+    setPhase("title");
+    setCh(null);
+    setFeed([]);
+    setNewsCard(null);
+    setNewsLoading(false);
+    setNewsMode(null);
+    usedNewsUrlsRef.current.clear();
+    prefetchedNewsRef.current = null;
+    prefetchPromiseRef.current = null;
+    prefetchAbortRef.current?.abort();
+    prefetchAbortRef.current = null;
+  };
 
   /* ---------- ROLLING ---------- */
   if (phase === "rolling") return (
@@ -512,27 +790,83 @@ export default function BrokeBy30() {
         <div style={{ padding: 12 }}>
           {phase === "decide" && (
             <div>
-              {card.kind === "news" && (
+              {isNewsTurn && (
                 <div className="pix" style={{ display: "inline-block", fontSize: 8, color: C.paper,
                   background: C.blue, border: `3px solid ${C.ink}`, padding: "4px 6px", marginBottom: 10 }}>
-                  ★ IN THE NEWS
+                  ★ IN THE NEWS · XTRACT
                 </div>
               )}
-              <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: C.ink, lineHeight: 1.35 }}>{card.title}</div>
-              <div className="mono" style={{ fontSize: 13, color: C.mute, marginTop: 6, lineHeight: 1.4 }}>{card.body}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 13 }}>
-                {card.options.map((o, i) => (
-                  <button key={i} onClick={() => choose(o)} className="opt mono"
-                    style={{ textAlign: "left", padding: "11px 12px", fontSize: 13.5, fontWeight: 700, color: C.ink }}>
-                    ▸ {o.label}
-                  </button>
-                ))}
-              </div>
-              {card.kind === "news" && card.source && (
-                <a href={card.source.url} target="_blank" rel="noreferrer" className="mono"
-                  style={{ display: "block", marginTop: 11, fontSize: 11, color: C.blue, textDecoration: "none" }}>
-                  ⧉ SOURCE: {card.source.headline}
-                </a>
+
+              {isNewsTurn && newsLoading ? (
+                <div style={{ padding: "10px 2px 6px" }}>
+                  <div className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: C.ink }}>
+                    FINISHING XTRACT ANALYSIS...
+                  </div>
+                  <div className="mono" style={{ fontSize: 11.5, color: C.mute, marginTop: 7, lineHeight: 1.45 }}>
+                    The next news event is normally prepared in the background.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: C.ink, lineHeight: 1.35 }}>
+                    {card.title}
+                  </div>
+
+                  <div className="mono" style={{ fontSize: 13, color: C.mute, marginTop: 6, lineHeight: 1.4 }}>
+                    {card.body}
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 13 }}>
+                    {card.options.map((o, i) => (
+                      <button key={i} onClick={() => choose(o)} className="opt mono"
+                        style={{ textAlign: "left", padding: "11px 12px", fontSize: 13.5, fontWeight: 700, color: C.ink }}>
+                        ▸ {o.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {isNewsTurn && card.source && (
+                    <details style={{ marginTop: 11 }}>
+                      <summary className="mono"
+                        style={{ fontSize: 10.5, color: C.blue, cursor: "pointer", lineHeight: 1.35 }}>
+                        ⧉ SOURCE: {card.source.sourceName || card.source.headline}
+                      </summary>
+
+                      <div className="mono"
+                        style={{ fontSize: 10.5, color: C.mute, marginTop: 8, lineHeight: 1.45 }}>
+                        <div>
+                          <b style={{ color: C.ink }}>HEADLINE:</b>{" "}
+                          {card.source.headline}
+                        </div>
+
+                        {card.source.evidence && (
+                          <div style={{ marginTop: 6 }}>
+                            <b style={{ color: C.ink }}>EVIDENCE:</b>{" "}
+                            {card.source.evidence}
+                          </div>
+                        )}
+
+                        <div style={{ marginTop: 7, fontSize: 9.5, letterSpacing: 0.4 }}>
+                          {sourceModeLabel(card.source)}
+                        </div>
+
+                        {card.source.url && (
+                          <a href={card.source.url} target="_blank" rel="noreferrer"
+                            style={{ display: "inline-block", marginTop: 7, color: C.blue }}>
+                            VIEW ORIGINAL SOURCE ↗
+                          </a>
+                        )}
+                      </div>
+                    </details>
+                  )}
+
+                  {isNewsTurn && newsMode === "game-fallback" && (
+                    <div className="mono"
+                      style={{ marginTop: 8, fontSize: 9.5, color: C.mute, lineHeight: 1.4 }}>
+                      LIVE XTRACT WAS UNAVAILABLE · USING GAME FALLBACK
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
